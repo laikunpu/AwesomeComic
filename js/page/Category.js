@@ -33,9 +33,11 @@ export default class Category extends Component {
 
     render() {
 
-        return <LoadingView
-            onFetch={this._fetch.bind(this)}
-        />
+        return (
+            <LoadingView
+                onFetch={this._fetch.bind(this)}
+            />
+        );
     }
 
     _fetch(callback) {
@@ -88,7 +90,7 @@ export default class Category extends Component {
 
     _openCategory(categoryInfo) {
         const {navigate} = this.props.navigation;
-        Jump.shareInstance().openList(navigate, {categoryInfo:categoryInfo});
+        Jump.shareInstance().openList(navigate, {categoryInfo: categoryInfo});
     }
 
 }

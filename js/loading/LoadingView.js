@@ -11,12 +11,12 @@ import {
 } from 'react-native';
 
 
-
 export default class LoadingView extends Component {
 
     static loading = 0
     static retry = 1
     static success = 2
+    static empty = 3
 
     static defaultProps = {
         onFetch: null,
@@ -48,6 +48,8 @@ export default class LoadingView extends Component {
                 view = this.state.dataView;
             }
             return view;
+        } else if (this.state.status == LoadingView.empty) {
+            return this._renderEmptyView();
         } else {
             return this._renderLoadingView();
         }
@@ -89,6 +91,23 @@ export default class LoadingView extends Component {
                     </Text>
                 </View>
             </TouchableWithoutFeedback>
+        );
+    }
+
+    //加载失败view
+    _renderEmptyView() {
+        return (
+            <View style={{
+                flex: 1,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: '#ffffff',
+            }}>
+                <Text>
+                    数据为空！
+                </Text>
+            </View>
         );
     }
 

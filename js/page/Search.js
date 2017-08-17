@@ -10,6 +10,7 @@ import * as types from '../action/ActionType';
 import Define from '../define/Define.js';
 import DataManager from '../data/DataManager'
 import Jump from  '../util/Jump'
+import LoadingView from '../loading/LoadingView'
 
 var GiftedListView = require('react-native-gifted-listview');
 
@@ -51,7 +52,11 @@ export default class Search extends Component {
             loadStatus: Define.Loading,
             firstRequested: false,
             isRequesting: false,
+            isLoadMoreError: false,
+            loadMoreCallback: null,
+            isFirstRequestSuccess: false,
             keyword: this.props.keyword,
+            searchUrl: null,
         };
     }
 
@@ -60,30 +65,36 @@ export default class Search extends Component {
     }
 
     render() {
+
         let renderView = <View />
         if (this.props.keyword) {
-            renderView = <GiftedListView
-                rowView={this._renderRowView}
-                onFetch={this._onFetch.bind(this)}
-                firstLoader={true}
-                pagination={true}
-                refreshable={true}
-                customStyles={{
-                    paginationView: {
-                        backgroundColor: '#eee',
-                    },
-                }}
-                refreshableTintColor="blue"
-                paginationFetchingView={this._paginationFetchingView.bind(this)}
-                paginationAllLoadedView={this._paginationAllLoadedView.bind(this)}
-                paginationWaitingView={this._renderPaginationWaitingView.bind(this)}
-                emptyView={this._renderEmptyView.bind(this)}
-                enableEmptySections={true}
-                onEndReached={this._onEndReached.bind(this)}
-                onEndReachedThreshold={40}
-                ref="listView"
-                removeClippedSubviews={false}
+            renderView = <LoadingView
+                onFetch={this._onLoadingViewFetch.bind(this)}
             />
+            if (this.state.isFirstRequestSuccess) {
+                renderView = <GiftedListView
+                    rowView={this._renderRowView}
+                    onFetch={this._onGiftedListViewFetch.bind(this)}
+                    firstLoader={true}
+                    pagination={true}
+                    refreshable={true}
+                    customStyles={{
+                        paginationView: {
+                            backgroundColor: '#eee',
+                        },
+                    }}
+                    refreshableTintColor="blue"
+                    paginationFetchingView={this._paginationFetchingView.bind(this)}
+                    paginationAllLoadedView={this._paginationAllLoadedView.bind(this)}
+                    paginationWaitingView={this._renderPaginationWaitingView.bind(this)}
+                    // emptyView={this._renderEmptyView.bind(this)}
+                    enableEmptySections={true}
+                    onEndReached={this._onEndReached.bind(this)}
+                    onEndReachedThreshold={40}
+                    ref="listView"
+                    removeClippedSubviews={false}
+                />
+            }
         }
         return (
             <View style={this.props.style}>
@@ -94,6 +105,33 @@ export default class Search extends Component {
         );
     }
 
+    _onLoadingViewFetch(callback) {
+        this._fetchPageData(1, function (error, response) {
+            if (!error) {
+                if (response.data && response.data.length) {
+                    this.setState(previousState => {
+                        previousState.recommendData = response.data;
+                        previousState.isFirstRequestSuccess = true;
+                        previousState.searchUrl = response.userInfo.searchUrl;
+                        return previousState;
+                    });
+                }else {
+                    callback({status: LoadingView.empty, dataView: null})
+                }
+            } else {
+                callback({status: LoadingView.retry, dataView: null})
+            }
+        }.bind(this))
+    }
+
+    _fetchPageData(page, callback) {
+        DataManager.shareInstance().getSearchList(this.state.searchUrl, this.props.keyword, page, function (error) {
+            callback(error, null);
+        }.bind(this), function (response) {
+            callback(null, response);
+        }.bind(this))
+    }
+
     /**
      * Will be called when refreshing
      * Should be replaced by your own logic
@@ -101,72 +139,57 @@ export default class Search extends Component {
      * @param {function} callback Should pass the rows
      * @param {object} options Inform if first load
      */
-    _onFetch(page = 1, callback, options) {
+    _onGiftedListViewFetch(page = 1, callback, options) {
         if (!this.state.isRequesting) {
             this.state.isRequesting = true;
+
             let rows = [];
             let callbackOptions = {};
-            if (options && options.firstLoad) {
-                this.state.isRequesting = false;
-                callback(rows, callbackOptions);
-            } else {
-                if (page == 1) {
-                    let requestCompleteCount = 0;
-                    let requestError;
-                    let completeFunc = function () {
-                        requestCompleteCount++;
-                        if (requestCompleteCount == 1) {
-                            if (requestError) {
-                                this.state.loadStatus = Define.LoadRetry;
-                                for (let i = 0; i < this.state.recommendData.length; i++) {
-                                    let movieInfo = this.state.recommendData[i];
-                                    let rowView = this._renderMovieRowView(movieInfo);
-                                    rows.push(rowView);
-                                }
-                            } else {
-                                this.state.loadStatus = Define.LoadSuccess;
-                            }
-                            callback(rows, callbackOptions);
-                            this.state.isRequesting = false;
-                        }
-                    }.bind(this);
 
-                    DataManager.shareInstance().getSearchList(this.state.keyword, page, function (error) {
-                        requestError = error;
-                        completeFunc();
-                    }, function (response) {
-                        this.state.recommendData = [];
-                        for (let i = 0; i < response.data.length; i++) {
-                            let movieInfo = response.data[i];
-                            let rowView = this._renderMovieRowView(movieInfo);
-                            rows.push(rowView);
-                            this.state.recommendData.push(movieInfo);
-                        }
-                        if (page >= response.userInfo.maxPage) {
-                            callbackOptions.allLoaded = true;
-                        }
-                        completeFunc();
-                    }.bind(this))
+            if (page == 1) {
+                let completeFunc = function () {
+                    for (let i = 0; i < this.state.recommendData.length; i++) {
+                        let movieInfo = this.state.recommendData[i];
+                        let rowView = this._renderMovieRowView(movieInfo);
+                        rows.push(rowView);
+                    }
+                    callback(rows, callbackOptions);
+                    this.state.isRequesting = false;
+                }.bind(this);
+                if (options.firstLoad) {
+                    completeFunc();
                 } else {
-                    DataManager.shareInstance().getSearchList(this.state.keyword, page, function (error) {
-                        callback(rows, callbackOptions);
-                        this.state.isRequesting = false;
-                    }, function (response) {
-                        for (let i = 0; i < response.data.length; i++) {
-                            let movieInfo = response.data[i];
-                            let rowView = this._renderMovieRowView(movieInfo);
-                            rows.push(rowView);
-                            this.state.recommendData.push(movieInfo);
+                    this._fetchPageData(1, function (error, response) {
+                        if (!error) {
+                            this.state.recommendData = response.data;
+                            completeFunc();
                         }
-                        if (page >= response.userInfo.maxPage) {
-                            callbackOptions.allLoaded = true;
-                        }
-                        callback(rows, callbackOptions);
-                        this.state.isRequesting = false;
                     }.bind(this))
                 }
+            } else {
+                this._fetchPageData(page, function (error, response) {
+                    if (!error) {
+                        for (let i = 0; i < response.data.length; i++) {
+                            let movieInfo = response.data[i];
+                            let rowView = this._renderMovieRowView(movieInfo);
+                            rows.push(rowView);
+                            this.state.recommendData.push(movieInfo);
+                        }
+                        if (page >= response.userInfo.maxPage) {
+                            callbackOptions.allLoaded = true;
+                        }
+                        callback(rows, callbackOptions);
+                        this.state.isRequesting = false;
+                    } else {
+                        this.state.isLoadMoreError = true;
+                        this.state.isRequesting = false;
+                        callback(rows, callbackOptions);
+                        this.refs.listView._setPage(page - 1);
+                    }
+                }.bind(this))
             }
             console.log("page = " + page);
+
         }
     }
 
@@ -185,30 +208,6 @@ export default class Search extends Component {
         this._openDetail(movieInfo);
     }
 
-    _renderEmptyView(refreshCallback) {
-        if (this.state.loadStatus == Define.LoadRetry) {
-            return (<View style={{
-                flex: 1,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: screenHeight - 49
-            }}>
-                <Text>
-                    加载失败，下拉可刷新！
-                </Text>
-            </View>);
-        } else {
-            if (!this.state.firstRequested) {
-                this.state.firstRequested = true;
-                setTimeout(() => {
-                    refreshCallback();
-                }, 100);
-
-            }
-        }
-    }
-
     _paginationFetchingView() {
         return (<View style={{height: 50, alignItems: 'center', justifyContent: 'center'}}><Text>加载中...</Text></View>);
     }
@@ -218,17 +217,25 @@ export default class Search extends Component {
     }
 
     _renderPaginationWaitingView(paginateCallback) {
-        // return (
-        //     <TouchableHighlight
-        //         underlayColor='#c8c7cc'
-        //         onPress={paginateCallback}
-        //         style={{height: 50, alignItems: 'center', justifyContent: 'center'}}
-        //     >
-        //         <Text style={{}}>
-        //             加载更多
-        //         </Text>
-        //     </TouchableHighlight>
-        // );
+        if (this.state.isLoadMoreError) {
+            this.state.loadMoreCallback = paginateCallback;
+            return (
+                <TouchableHighlight
+                    underlayColor='#c8c7cc'
+                    onPress={this._onloadMore.bind(this)}
+                    style={{height: 50, alignItems: 'center', justifyContent: 'center'}}
+                >
+                    <Text style={{}}>
+                        加载更多
+                    </Text>
+                </TouchableHighlight>
+            );
+        }
+    }
+
+    _onloadMore() {
+        this.state.isLoadMoreError = false;
+        this.state.loadMoreCallback();
     }
 
     _renderMovieRowView(movieInfo) {

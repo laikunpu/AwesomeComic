@@ -2,8 +2,10 @@ import MovieInfo from '../model/MovieInfo';
 import CategoryInfo from '../model/CategoryInfo'
 import Constant from '../util/Constant';
 
+
 var DOMParser = require('xmldom').DOMParser;
 var gb2312 = require("encode-gb2312");
+var axios = require("axios");
 
 let dataManagerInstance = null;
 
@@ -68,34 +70,65 @@ export default class DataManager {
         let baseUrl = url.substring(0, url.indexOf("/", 7));
         return this._fetchHtml(url, failure, function (text) {
             let infoData = this._listParser(text, baseUrl);
-            let response = this._makeResponse(infoData.resource, null, {maxPage: infoData.maxPage});
-            success(response);
+            if (infoData) {
+                let response = this._makeResponse(infoData.resource, null, {maxPage: infoData.maxPage});
+                success(response);
+            } else {
+                failure(new Error('The infoData is empty'));
+            }
         }.bind(this));
     }
 
-    getSearchList(keyword, page, failure, success) {
+    getSearchList(searchUrl, keyword, page, failure, success) {
         failure = this._checkFailure(failure);
         success = this._checkSuccess(success);
         if (!page || page < 1) {
             page = 1;
         }
-        let gb2312Keyword = "";
-        if (keyword) {
-            keyword = gb2312.encodeToGb2312(keyword);
-            for (let i = 0; i < keyword.length; i++) {
-                let word = keyword[i];
-                if (i % 2 == 0) {
-                    gb2312Keyword += "%";
+
+        let config = {
+            responseType: 'blob',
+        };
+
+        let url;
+        if (searchUrl && page > 1) {
+            url = searchUrl.replace(".html", "-page-" + (page - 1) + ".html");
+            config.method = "get";
+        } else {
+            let gb2312Keyword = "";
+            if (keyword) {
+                keyword = gb2312.encodeToGb2312(keyword);
+                for (let i = 0; i < keyword.length; i++) {
+                    let word = keyword[i];
+                    if (i % 2 == 0) {
+                        gb2312Keyword += "%";
+                    }
+                    gb2312Keyword += word;
                 }
-                gb2312Keyword += word;
             }
+            url = Constant.DYTT_SEARCH_UR;
+            config.method = "post";
+            config.headers = {"Content-Type": "application/x-www-form-urlencoded"};
+            config.transformRequest = [function(data){
+                //在这里根据自己的需求改变数据
+                return 'classid=0&show=title%2Csmalltext&tempid=1&keyboard=' + gb2312Keyword + '&Submit=%C1%A2%BC%B4%CB%D1%CB%F7';
+            }]
         }
-        let url = "http://s.dydytt.net/plus/so.php?kwtype=0&searchtype=title&keyword=" + gb2312Keyword + "&PageNo=" + page;
+        config.url = url;
         let baseUrl = url.substring(0, url.indexOf("/", 7));
-        return this._fetchHtml(url, failure, function (text) {
+        return this._fetchHtmlWithParams(config, failure, function (text, url) {
             let infoData = this._listParser(text, baseUrl);
-            let response = this._makeResponse(infoData.resource, null, {maxPage: infoData.maxPage});
-            success(response);
+            if (infoData) {
+                let response;
+                if (infoData.isEmpty) {
+                    response = this._makeResponse([], null, null);
+                } else {
+                    response = this._makeResponse(infoData.resource, null, {maxPage: infoData.maxPage, searchUrl: url});
+                }
+                success(response);
+            } else {
+                failure(new Error('The infoData is empty'));
+            }
         }.bind(this));
     }
 
@@ -106,6 +139,7 @@ export default class DataManager {
         let content = this._lookUpClass(co_area2, "div", "co_content222", "");
         let lis = content.getElementsByTagName("li");
         let as = this._searchTarget(lis, "a", 0);
+        as.splice(0, 1);
         let spans = this._searchTarget(lis, "span", 0);
         let focusInfos = [];
         for (let i = 0; i < as.length; i++) {
@@ -125,31 +159,51 @@ export default class DataManager {
     _listParser(htmlText, baseUrl) {
         let parser = new DOMParser();
         let doc = parser.parseFromString(htmlText, "text/html")
-        let content = this._lookUpClass(doc, "div", "co_content8", "首页");
-        let tables = content.getElementsByTagName("table");
-        let trs = this._searchTarget(tables, "tr", 1);
-        let trs2 = this._searchTarget(tables, "tr", 2);
-        let trs3 = this._searchTarget(tables, "tr", 3);
-        let recommendInfos = [];
-        let infoData = {};
-        for (let i = 0; i < trs.length; i++) {
-            let tr = trs[i];
-            let tr2 = trs2[i];
-            let tr3 = trs3[i];
-            let movieInfo = new MovieInfo();
-            let as = tr.getElementsByTagName("a");
-            if (as && as.length) {
-                let a = as[as.length - 1];
-                movieInfo.name = a.textContent;
-                movieInfo.detailUrl = baseUrl + a.getAttribute("href");
+        let content = this._lookUpClass(doc, "div", "co_content8", "日期");
+        let infoData;
+        if (content) {
+            let tables = content.getElementsByTagName("table");
+            let trs = this._searchTarget(tables, "tr", 1);
+            let trs2 = this._searchTarget(tables, "tr", 2);
+            let trs3 = this._searchTarget(tables, "tr", 3);
+            let recommendInfos = [];
+            infoData = {};
+            for (let i = 0; i < trs.length; i++) {
+                let tr = trs[i];
+                let tr2 = trs2[i];
+                let tr3 = trs3[i];
+                let movieInfo = new MovieInfo();
+                let as = tr.getElementsByTagName("a");
+                if (as && as.length) {
+                    let a = as[as.length - 1];
+                    movieInfo.name = a.textContent;
+                    movieInfo.detailUrl = baseUrl + a.getAttribute("href");
+                }
+                movieInfo.date = tr2.textContent.replace(/[\r\n]/g, "").trim().replace("点击：0", "");
+                movieInfo.summary = tr3.textContent.replace(/[\r\n]/g, "").trim();
+                recommendInfos.push(movieInfo);
             }
-            movieInfo.date = tr2.textContent.replace(/[\r\n]/g, "").trim().replace("点击：0", "");
-            movieInfo.summary = tr3.textContent.replace(/[\r\n]/g, "").trim();
-            recommendInfos.push(movieInfo);
+            infoData.resource = recommendInfos;
+            let x = this._lookUpClass(doc, "div", "x", "页");
+            let as = x.getElementsByTagName("a");
+            if (as && as.length) {
+                let a = as[0];
+                let title = a.getAttribute("title");
+                if (title == "总数") {
+                    let bs = a.getElementsByTagName("b");
+                    if (bs && bs.length) {
+                        let b = bs[0];
+                        infoData.maxPage = parseFloat(b.textContent) / 20;
+                    }
+                }
+            }
+            if (infoData.maxPage == undefined) {
+                infoData.maxPage = parseInt(x.textContent.substring(x.textContent.indexOf("/") + 1, x.textContent.indexOf("每页")));
+            }
+        } else if (htmlText.indexOf("如果您的浏览器没有自动跳转，请点击这里")) {
+            infoData = {};
+            infoData.isEmpty = true;
         }
-        infoData.resource = recommendInfos;
-        let x = this._lookUpClass(doc, "div", "x", "首页");
-        infoData.maxPage = parseInt(x.textContent.substring(x.textContent.indexOf("/") + 1, x.textContent.indexOf("每页")));
         return infoData;
     }
 
@@ -297,26 +351,53 @@ export default class DataManager {
     }
 
     _fetchHtml(url, failure, success) {
-        fetch(url, null).then(function (response) {
-            if (response.ok) {
-                response.blob().then(function (blob) {
-                    var reader = new FileReader();
-                    reader.onerror = function () {
-                        failure(new Error('read html text error'));
-                    }
-                    reader.onload = function () {
-                        var text = reader.result;
-                        text = this.cleanIllegalCharacters(text);
-                        success(text);
-                    }.bind(this)
-                    reader.readAsText(blob, 'gb2312');
-                }.bind(this));
+        let config = {
+            method: 'get',
+            url: url,
+            responseType: 'blob',
+        };
+        this._fetchHtmlWithParams(config, failure, success)
+    }
+
+    _fetchHtmlWithParams(config, failure, success) {
+        axios.request(config).then(function (response) {
+            if (response.status == 200) {
+                var reader = new FileReader();
+                reader.onerror = function () {
+                    failure(new Error('read html text error'));
+                }
+                reader.onload = function () {
+                    var text = reader.result;
+                    text = this.cleanIllegalCharacters(text);
+                    success(text, response.request.responseURL);
+                }.bind(this);
+                reader.readAsText(response.data, 'gb2312');
             } else {
                 failure(new Error('http status = ' + response.status));
             }
-        }.bind(this), function (error) {
+        }.bind(this)).catch(function (error) {
             failure(error);
         });
+        // fetch(url, init).then(function (response) {
+        //     if (response.ok) {
+        //         response.blob().then(function (blob) {
+        //             var reader = new FileReader();
+        //             reader.onerror = function () {
+        //                 failure(new Error('read html text error'));
+        //             }
+        //             reader.onload = function () {
+        //                 var text = reader.result;
+        //                 text = this.cleanIllegalCharacters(text);
+        //                 success(text, response.url);
+        //             }.bind(this)
+        //             reader.readAsText(blob, 'gb2312');
+        //         }.bind(this));
+        //     } else {
+        //         failure(new Error('http status = ' + response.status));
+        //     }
+        // }.bind(this), function (error) {
+        //     failure(error);
+        // });
     }
 
     _replaceAll(string, search, replacement) {

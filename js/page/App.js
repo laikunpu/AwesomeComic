@@ -7,10 +7,15 @@ import {Provider} from 'react-redux';
 import configureStore from '../store/configureStore'
 
 import Navigation from './Navigation';
+import codePush from 'react-native-code-push'
 
 const store = configureStore();
 
 export default class App extends Component {
+
+    componentDidMount() {
+        codePush.sync()
+    }
 
     constructor(props) {
         super(props);

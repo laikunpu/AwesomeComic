@@ -98,11 +98,11 @@ export default class Recommend extends Component {
             />
         }
         return (
-            <View style={{flex: 1, backgroundColor: "#ffffff"}}>
+            <View style={{flex: 1, backgroundColor: "#ffffff", flexDirection:'column-reverse'}}>
+                {view}
                 <SearchBar
                     navigation={this.props.navigation}
                 />
-                {view}
             </View>
         );
     }

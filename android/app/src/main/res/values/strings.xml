@@ -1,3 +1,4 @@
 <resources>
+    <string moduleConfig="true" name="reactNativeCodePush_androidDeploymentKey">ZXb5EkMtUjHinPDjCn1olo5WtjsB7817529e-437e-4caa-bdd9-dfcd4c43cbb9</string>
     <string name="app_name">AwesomeComic</string>
 </resources>

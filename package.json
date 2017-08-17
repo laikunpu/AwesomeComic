@@ -7,8 +7,9 @@
     "test": "jest"
   },
   "dependencies": {
-    "react": "16.0.0-alpha.6",
-    "react-native": "0.43.4",
+    "react": "16.0.0-alpha.12",
+    "react-native": "0.46.4",
+    "react-native-code-push": "^4.1.0-beta",
     "react-native-easy-gridview": "^1.0.2",
     "react-native-fs": "^2.3.2",
     "react-native-gifted-listview": "0.0.15",

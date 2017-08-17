@@ -37,7 +37,7 @@ export default class SearchBar extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            showSearchView:false,
+            showSearchView: false,
         };
     }
 
@@ -48,10 +48,15 @@ export default class SearchBar extends Component {
     render() {
         let searchView = <View/>;
         if (this.state.showSearchView) {
-            searchView = <SearchView style={{top:20, height:Constant.SCREEN_HEIGHT - 64}} keyword={this.state.keyword} />
+            searchView =
+                <SearchView
+                    style={{top: 20, height: Constant.SCREEN_HEIGHT - 64}}
+                    keyword={this.state.keyword}
+                    navigation={this.props.navigation}
+                />
         }
         return (
-            <View style={{zIndex: 100, height: 64}}>
+            <View style={{height: 64}}>
                 <View style={{top: 20, height: 44}}>
                     <View style={{height: 43}}>
                         <SearchBox
@@ -73,31 +78,32 @@ export default class SearchBar extends Component {
     }
 
     _onFocus = (text) => {
-        return new Promise(function(resolve, reject) {
+        return new Promise(function (resolve, reject) {
             this.setState({
-                showSearchView:true
+                showSearchView: true,
+                keyword: null,
             });
-            this.props.navigation.setParams({hideTabbar:true});
+            this.props.navigation.setParams({hideTabbar: true});
             resolve();
         }.bind(this));
     }
 
     _onCancel = (text) => {
-        return new Promise(function(resolve, reject) {
+        return new Promise(function (resolve, reject) {
             this.setState({
-                showSearchView:false
+                showSearchView: false
             });
-            this.props.navigation.setParams({hideTabbar:false});
+            this.props.navigation.setParams({hideTabbar: false});
             resolve();
         }.bind(this));
     }
 
     _onSearch(text) {
-        return new Promise(function(resolve, reject) {
+        return new Promise(function (resolve, reject) {
             if (text) {
                 this.setState({
-                    showSearchView:true,
-                    keyword:text,
+                    showSearchView: true,
+                    keyword: text,
                 });
                 // DataManager.shareInstance().getSearchList(text, 1, null, null);
             }

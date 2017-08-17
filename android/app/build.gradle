@@ -66,6 +66,7 @@ import com.android.build.OutputFile
  */
 
 apply from: "../../node_modules/react-native/react.gradle"
+apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"
 
 /**
  * Set this to true to create two separate APKs instead of one:
@@ -82,6 +83,9 @@ def enableSeparateBuildPerCPUArchitecture = false
  */
 def enableProguardInReleaseBuilds = false
 
+Properties properties = new Properties()
+properties.load(project.rootProject.file('local.properties').newDataInputStream())
+
 android {
     compileSdkVersion 23
     buildToolsVersion "23.0.1"
@@ -91,9 +95,17 @@ android {
         minSdkVersion 16
         targetSdkVersion 22
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         ndk {
             abiFilters "armeabi-v7a", "x86"
+        }
+    }
+    signingConfigs {
+        release {
+            storeFile  file(properties.getProperty("MYAPP_RELEASE_STORE_FILE"))
+            storePassword  properties.getProperty("MYAPP_RELEASE_STORE_PASSWORD")
+            keyAlias  properties.getProperty("MYAPP_RELEASE_KEY_ALIAS")
+            keyPassword properties.getProperty("MYAPP_RELEASE_KEY_PASSWORD")
         }
     }
     splits {
@@ -105,9 +117,18 @@ android {
         }
     }
     buildTypes {
+        debug {
+
+        }
+        releaseStaging {
+            buildConfigField "String", "CODEPUSH_KEY", '"'+properties.getProperty("code_push_key_production")+'"'
+        }
+
         release {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            buildConfigField "String", "CODEPUSH_KEY", '"'+properties.getProperty("code_push_key_staging")+'"'
+            signingConfig  signingConfigs.release
         }
     }
     // applicationVariants are e.g. debug, release
@@ -126,6 +147,7 @@ android {
 }
 
 dependencies {
+    compile project(':react-native-code-push')
     compile fileTree(dir: "libs", include: ["*.jar"])
     compile "com.android.support:appcompat-v7:23.0.1"
     compile "com.facebook.react:react-native:+"  // From node_modules
